@@ -44,6 +44,7 @@ export default function SignUp() {
 
       toast.success('Registration successful!');
       router.push('/auth/signin');
+      router.refresh()
     } catch (err: any) {
       console.error("Axios Error:", err);
     
@@ -63,7 +64,7 @@ export default function SignUp() {
     }
   };
 
-  return (
+  return ( 
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader>

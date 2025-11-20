@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
+import Loading from '@/components/LoadingPage';
 
 
 export default function SignIn() {
@@ -16,33 +17,64 @@ export default function SignIn() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { data: session } = useSession(); // get the session
+    const { data: session,status } = useSession(); // get the session
 
-  useEffect(() => {
-    if (session) router.push("/dashboard");
-  }, [session]);
+    useEffect(() => {
+    if (session && session.accessToken) {
+        router.push('/dashboard');
+    }
+    }, [session, router]);
+
+    if (status === "loading") {
+        return <Loading />;
+    }
+    
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+      
         setLoading(true);
         setError('');
-
-        const result = await signIn('credentials', {
+      
+        try {
+          const result = await signIn("credentials", {
             email,
             password,
             redirect: false, 
-        });
-        if (result?.error) {
+          });
+      
+          // If NextAuth throws an error
+          if (result?.error) {
             setError(result.error);
-            toast.error(result.error)
-            setLoading(false);
-        } else if (result?.ok) {
-            toast.success("Login Successful")
-            router.push('/dashboard');
+            toast.error(result.error);
+            return;
+          }
+      
+          // Login success
+          if (result?.ok) {
+            toast.success("Login Successful");
+            router.push("/dashboard");
+            router.refresh();
+          }
+      
+        } catch (err: any) {
+          // Handle unexpected exceptions (network, server down, etc)
+          console.error("Login error:", err);
+      
+          const errorMessage =
+            err?.message || "Something went wrong during sign-in.";
+      
+          setError(errorMessage);
+          toast.error(errorMessage);
+      
+        } finally {
+          // Always stop loading
+          setLoading(false);
         }
-    };
+      };
+      
 
-    return (
+    return ( loading ? <Loading /> :
         <div className="flex items-center justify-center min-h-screen bg-gray-50">
             <Card className="w-full max-w-md">
                 <CardHeader>
@@ -87,6 +119,7 @@ export default function SignIn() {
                         <p className='items-center text-center text-gray-500'>If You Don't Have a Account?<span>
                             <Button variant={"ghost"} className='underline' onClick={() => {
                                 router.push("/")
+                                router.refresh()
                             }}>
                                 SignUp
                             </Button>

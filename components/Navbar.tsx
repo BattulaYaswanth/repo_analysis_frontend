@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 
 const navLinks = [
   { href: "/dashboard", label: "Dashboard" },
+  {href:"/all",label:"All Reviews"},
+  {href:"/code_review",label:"Code Review"}
 ];
 
 export default function Navbar() {
@@ -20,7 +22,7 @@ export default function Navbar() {
       <div className="flex items-center gap-2">
         <Link href="/dashboard">
           <span className="text-xl font-bold tracking-tight bg-linear-to-r from-blue-500 to-cyan-400 bg-clip-text text-transparent">
-            MyApp
+            Repo Analyzer
           </span>
         </Link>
       </div>

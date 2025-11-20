@@ -4,6 +4,10 @@ import { withAuth } from "next-auth/middleware";
 export default withAuth(async function middleware(req) {
   const token = req.nextauth?.token?.accessToken;
 
+  if(!token){
+    return Response.redirect(new URL("/auth/signin", req.url));
+  }
+
   if (token) {
     const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/validate-token`, {
       headers: { Authorization: `Bearer ${token}` },

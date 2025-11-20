@@ -1,51 +1,138 @@
 "use client";
+import ProgressBarPage from "@/components/ProgressBar";
 import axios from "axios";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const Dashboard = () => {
-  const { data: session } = useSession(); // ✅ useSession here
+  const { data: session,status } = useSession(); // ✅ useSession here
   const token = session?.accessToken;      // ✅ get token safely
   const router = useRouter();
-  const[repo_url,setRepoUrl] = useState("");
+  const [repo_url,setRepoUrl] = useState("");
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const handleSubmit = async(e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  const [progress,setProgress] = useState(0)
+  const [progressStart,setProgressStart] = useState(false)
+  const [statusText,setStatusText] = useState("")
+
+  useEffect(() => {
+    setLoading(true)
     try {
-      const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/analyze_repo`,
-        { repo_url },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }
-      );
-      router.push(`/dashboard/${res.data.id}`)
-    } catch (err:any) {
-      console.error("Axios Error:", err);
-      // Safely extract the backend error message if available
-      const errorMsg =
-        err.response?.data?.error ||  // 👈 FastAPI's JSON message
-        err.response?.data?.detail || // 👈 Optional (FastAPI default error field)
-        err.message ||                // 👈 Axios' generic message
-        "Something went wrong";       // 👈 Fallback
-    
-      setError(errorMsg);
-      toast.error(errorMsg);
+      if (status === "loading") return; // Wait until NextAuth finishes
+
+      if (status === "unauthenticated") {
+        router.push("/auth/signin");
+      }
+    } catch (error) {
+      console.log(error)
     }
     finally{
       setLoading(false)
     }
-  }
+}, [status]);
 
-  return (
+const POLLING_INTERVAL = 10000; // Poll every 10 seconds
+
+// Helper function to wait
+const delay = (ms: number | undefined) => new Promise(resolve => setTimeout(resolve, ms));
+
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setProgressStart(true);
+  setError('');
+  
+  let jobId = ''; // Initialize jobId outside try block for wider scope
+  
+  try {
+      // === 1. SUBMIT JOB ===
+      const submitRes = await axios.post(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/analyze_repo`,
+          { repo_url },
+          {
+              headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { Authorization: `Bearer ${token}` } : {})
+              },
+          }
+      );
+
+      // Destructure ID and status from the successful submission
+      const { id, status: submitStatus } = submitRes.data;
+      jobId = id; // Assign to outer scope variable
+      
+      if (submitStatus === 'success') {
+          // Case 1: Job was already completed (initial cache hit)
+          // ACTION: Redirect immediately
+          router.push(`/dashboard/${jobId}`);
+          router.refresh();
+          return; // Exit the function after success
+      }
+
+      // Case 2: Job was submitted successfully ('job_submitted' or 'pending')
+      console.log(`Job submitted. Starting polling for ID: ${jobId}`);
+      
+      // === 2. POLLING LOOP ===
+      let jobStatus = submitStatus; 
+
+      while (jobStatus !== 'completed' && jobStatus !== 'failed') {
+          await delay(POLLING_INTERVAL); // Ensure delay is defined in your file
+          
+          const pollRes = await axios.get(
+              `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/analyze_repo/status/${jobId}`,
+              {
+                  headers: {
+                      ...(token ? { Authorization: `Bearer ${token}` } : {})
+                  },
+              }
+          );
+
+          const progressRes = await axios.get(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/analyze_repo/progress/${jobId}`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+          );
+
+          setProgress(progressRes.data.progress); 
+
+          jobStatus = pollRes.data.status;
+          console.log(`Current status for job ${jobId}: ${jobStatus}`);
+
+          if (jobStatus === 'completed') {
+              // ACTION: Redirect immediately when completed status is received
+              router.push(`/dashboard/${jobId}`);
+              router.refresh();
+              // IMPORTANT: Now we rely on the redirect to stop the loading state via the 'finally' block
+              break; // Exit the loop
+          } else if (jobStatus === 'failed') {
+              // ACTION: Throw the error to be caught by the catch block
+              throw new Error(`Analysis failed: ${pollRes.data.error || 'Check backend logs.'}`);
+          }
+      }
+      
+      // Removed `return result;` as the redirect now handles the exit flow
+      
+  } catch (err: any) {
+      console.error("Analysis Polling Error:", err);
+      // ... (Error handling logic remains here) ...
+      const errorMsg =
+          err.response?.data?.error ||
+          err.response?.data?.detail ||
+          (typeof err.response?.data === "string" ? err.response.data : null) ||
+          err.message ||
+          "Something went wrong";
+      setError(errorMsg);
+      toast.error(errorMsg);
+      
+  } finally {
+      // This is correctly placed to run after try/catch block finishes (success or failure)
+      setProgressStart(false);
+  }
+}
+
+
+
+  return (progressStart ? <ProgressBarPage progress={progress} statusText={statusText}/> :
     <div className="min-h-screen bg-background text-foreground antialiased selection:bg-primary/20">
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 lg:py-32">
 
@@ -74,7 +161,7 @@ const Dashboard = () => {
                       </span>
                 </div>
 
-                <button type="submit" onClick={handleSubmit} disabled={loading}
+                <button type="submit" onClick={handleSubmit} disabled={loading || progressStart}
                  className="Button inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 whitespace-nowrap">
                   Analyze <span className="ml-2 hidden sm:inline-block">Repo</span>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
