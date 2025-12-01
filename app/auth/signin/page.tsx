@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import Loading from '@/components/LoadingPage';
+import axios from 'axios';
 
 
 export default function SignIn() {
@@ -32,25 +33,41 @@ export default function SignIn() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-      
         setLoading(true);
-        setError('');
+        setError("");
       
         try {
           const result = await signIn("credentials", {
             email,
             password,
-            redirect: false, 
+            redirect: false,
           });
       
-          // If NextAuth throws an error
+          // If wrong credentials or unknown error
           if (result?.error) {
+            // Check if backend returned this message
+            if (result.error === "User not verified") {
+              toast.info("Account not verified. Sending new OTP...");
+      
+              // Request new OTP
+              await axios.post(
+                `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/resend-otp`,
+                { email },
+                { headers: { "Content-Type": "application/json" } }
+              );
+      
+              toast.success("OTP sent to your email");
+              router.push(`/auth/verify?email=${email}`);
+              return;
+            }
+      
+            // Other errors
             setError(result.error);
             toast.error(result.error);
             return;
           }
       
-          // Login success
+          // Successful login
           if (result?.ok) {
             toast.success("Login Successful");
             router.push("/dashboard");
@@ -58,20 +75,16 @@ export default function SignIn() {
           }
       
         } catch (err: any) {
-          // Handle unexpected exceptions (network, server down, etc)
           console.error("Login error:", err);
-      
           const errorMessage =
             err?.message || "Something went wrong during sign-in.";
-      
           setError(errorMessage);
           toast.error(errorMessage);
-      
         } finally {
-          // Always stop loading
           setLoading(false);
         }
       };
+      
       
 
     return ( loading ? <Loading /> :

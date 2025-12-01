@@ -24,7 +24,7 @@ export default function SignUp() {
     e.preventDefault();
     setLoading(true);
     setError('');
-
+  
     try {
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/register`,
@@ -36,33 +36,26 @@ export default function SignUp() {
           },
         }
       );
-      const data = res.data;
-      if (res.status !== 200) {
-        setEmail(data.error || "Registration Failed")
-        return
-      }
-
+  
       toast.success('Registration successful!');
-      router.push('/auth/signin');
-      router.refresh()
+      router.push('/auth/verify?email=' + email); // redirect to OTP page
+      router.refresh();
     } catch (err: any) {
       console.error("Axios Error:", err);
-    
-      // Safely extract the backend error message if available
+      
       const errorMsg =
-        err.response?.data?.error ||  // 👈 FastAPI's JSON message
-        err.response?.data?.detail || // 👈 Optional (FastAPI default error field)
-        err.message ||                // 👈 Axios' generic message
-        "Something went wrong";       // 👈 Fallback
-    
+        err.response?.data?.error ||
+        err.response?.data?.detail ||
+        err.message ||
+        "Something went wrong";
+      
       setError(errorMsg);
       toast.error(errorMsg);
-    }
-    
-    finally {
+    } finally {
       setLoading(false);
     }
   };
+  
 
   return ( 
     <div className="flex items-center justify-center min-h-screen bg-gray-50">

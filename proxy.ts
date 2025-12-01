@@ -22,7 +22,7 @@ export default withAuth(async function middleware(req) {
 
 export const config = {
   matcher: [
-    // protect everything except /auth/sign (signin) and /
-    "/((?!auth/sign|$|_next/static|_next/image|favicon.ico).*)",
+    // protect everything except /auth (signin) and /
+    "/((?!auth/|auth/sign|$|_next/static|_next/image|favicon.ico).*)"
   ],
 };

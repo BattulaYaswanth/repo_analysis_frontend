@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { useLanguageStore } from '@/context/store';
 
 // --- Configuration ---
-const API_URL = 'http://localhost:8000/api/code_review'; 
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL + '/api/code_review'; 
 const INITIAL_CODE = 
 `def is_palindrome(s):
     # Potential issue: converts int/list to string incorrectly
