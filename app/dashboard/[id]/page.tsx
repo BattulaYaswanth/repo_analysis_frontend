@@ -130,7 +130,6 @@ export default function DashboardPage({ params }: DashboardPageProps) {
           tests: data.tests ?? "No test details available.",
           used_model: data.used_model ?? "N/A"
         });
-        console.log(data)
       } catch (err: any) {
         const statusCode = err?.response?.status;
         const detail = err?.response?.data?.detail;

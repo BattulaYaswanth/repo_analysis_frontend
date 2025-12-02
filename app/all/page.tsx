@@ -8,7 +8,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NoRecordsFound from "@/components/NoRecordsFound";
 
-// --- MOCK SHADCN COMPONENTS (replace with real imports in production) ---
 const Card = ({ className = "", children,onClick }: { onClick?:()=>void;className?: string; children: React.ReactNode }) => (
   <div onClick={onClick} className={`rounded-xl border bg-card text-card-foreground shadow-lg transition-all duration-300 ${className}`}>
     {children}

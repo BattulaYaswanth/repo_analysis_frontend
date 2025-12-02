@@ -34,7 +34,6 @@ export default function StreamingCodeReviewer() {
     setReviewOutput(''); 
     setIsLoading(true);
     try {
-      console.log("Selected Language:", language); // <-- HERE
       if (!language) {
         toast.error("Please select a programming language!");
         return;

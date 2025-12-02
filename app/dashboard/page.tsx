@@ -69,9 +69,6 @@ const handleSubmit = async (e: React.FormEvent) => {
           router.refresh();
           return; // Exit the function after success
       }
-
-      // Case 2: Job was submitted successfully ('job_submitted' or 'pending')
-      console.log(`Job submitted. Starting polling for ID: ${jobId}`);
       
       // === 2. POLLING LOOP ===
       let jobStatus = submitStatus; 
@@ -96,7 +93,6 @@ const handleSubmit = async (e: React.FormEvent) => {
           setProgress(progressRes.data.progress); 
 
           jobStatus = pollRes.data.status;
-          console.log(`Current status for job ${jobId}: ${jobStatus}`);
 
           if (jobStatus === 'completed') {
               // ACTION: Redirect immediately when completed status is received
