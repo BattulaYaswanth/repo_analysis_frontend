@@ -48,19 +48,16 @@ export default function SignIn() {
             // Check if backend returned this message
             if (result.error === "User not verified") {
               toast.info("Account not verified. Sending new OTP...");
-      
-              // Request new OTP
-              await axios.post(
-                `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/resend-otp`,
-                { email },
-                { headers: { "Content-Type": "application/json" } }
-              );
-      
               toast.success("OTP sent to your email");
               router.push(`/auth/verify?email=${email}`);
               return;
             }
-      
+            if(result.error === "Already Email Sent Please Verify Your Account")
+            {
+              toast.info("Already Email Sent Please Verify Your Account");
+              router.push(`/auth/verify?email=${email}`);
+              return;
+            }
             // Other errors
             setError(result.error);
             toast.error(result.error);

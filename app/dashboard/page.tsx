@@ -89,8 +89,11 @@ const handleSubmit = async (e: React.FormEvent) => {
             `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/analyze_repo/progress/${jobId}`,
             { headers: token ? { Authorization: `Bearer ${token}` } : {} }
           );
-
-          setProgress(progressRes.data.progress); 
+          if(progressRes.data.progress === 100){
+            setProgress(99); 
+          }else{
+            setProgress(progressRes.data.progress); 
+          }
 
           jobStatus = pollRes.data.status;
 
