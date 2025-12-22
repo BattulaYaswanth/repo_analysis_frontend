@@ -10,7 +10,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import Loading from '@/components/LoadingPage';
 import axios from 'axios';
-
+import { EyeIcon, EyeOff } from 'lucide-react';
+import { EyeClosedIcon } from 'lucide-react';
 
 export default function SignIn() {
     const router = useRouter();
@@ -18,6 +19,7 @@ export default function SignIn() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const { data: session,status } = useSession(); // get the session
 
     useEffect(() => {
@@ -110,24 +112,35 @@ export default function SignIn() {
                                 required
                             />
                         </div>
-
                         <div className="space-y-2">
                             <Label htmlFor="password">Password</Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                            />
-                        </div>
+                            <div className="relative">
+                              <Input
+                                  id="password"
+                                  type={showPassword ? "text" : "password"}
+                                  placeholder="••••••••"
+                                  value={password}
+                                  onChange={(e) => setPassword(e.target.value)}
+                                  required
+                                  className="pr-10"
+                              />
 
+                              <button
+                                  type="button"
+                                  onClick={() => setShowPassword((prev) => !prev)}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground hover:text-foreground"
+                                  aria-label={showPassword ? "Hide password" : "Show password"}
+                              >
+                                  {showPassword ? <EyeIcon/> : <EyeOff/>}
+                              </button>
+                          </div>
+                        </div>
                         <Button type="submit" className="w-full" disabled={loading}>
                             {loading ? 'Signing in...' : 'Sign In'}
                         </Button>
                         <p className='items-center text-center text-gray-500'>If You Don't Have a Account?<span>
-                            <Button variant={"ghost"} className='underline' onClick={() => {
+                            <Button variant={"ghost"} disabled={loading}
+                             className='underline' onClick={() => {
                                 router.push("/")
                                 router.refresh()
                             }}>
