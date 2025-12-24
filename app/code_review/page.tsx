@@ -63,7 +63,8 @@ export default function StreamingCodeReviewer() {
       }
       clearLanguage()
     } catch (error) {
-      setReviewOutput((prev) => prev + `\n\n[ERROR]: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`[ERROR]: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error("Something went wrong while reviewing the code");
     } finally {
       setIsLoading(false);
     }

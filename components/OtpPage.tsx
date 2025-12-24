@@ -175,8 +175,8 @@ export default function OTPPage() {
             <button
               type="button"
               onClick={handleResend}
-              disabled={resendLoading || cooldown > 0}
-              className="inline-flex items-center gap-2 rounded border px-3 py-2 disabled:opacity-60"
+              disabled={resendLoading || cooldown > 0 || loading}
+              className="inline-flex items-center gap-2 rounded border px-3 py-2 disabled:opacity-60 cursor-pointer"
             >
               {resendLoading ? "Resending..." : cooldown > 0 ? `Resend (${cooldown}s)` : "Resend OTP"}
             </button>
@@ -188,7 +188,9 @@ export default function OTPPage() {
         </div>
 
         <div className="mt-6 text-xs text-muted-foreground">
-          <p>Need to use a different email? <button onClick={() => { localStorage.removeItem("pending_verification_email"); router.push("/"); }} className="text-primary underline">Change email</button></p>
+          <p>Need to use a different email? <button onClick={() => { localStorage.removeItem("pending_verification_email"); router.push("/"); }} 
+            className="text-primary underline cursor-pointer" disabled={loading}>
+            Change email</button></p>
         </div>
       </div>
     </div>
