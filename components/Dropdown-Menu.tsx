@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -42,7 +41,8 @@ const LANGUAGES = [
   "Solidity",
 ];
 
-export function DropdownMenuDemo({ onSelect }: { onSelect?: (lang: string) => void }) {
+export function DropdownMenuDemo({ onSelect,disabled }: { onSelect?: (lang: string) => void,
+  disabled?:boolean }) {
   const { language, setLanguage } = useLanguageStore(); 
   const handleSelect = (lang: string) => {
     setLanguage(lang)
@@ -51,7 +51,7 @@ export function DropdownMenuDemo({ onSelect }: { onSelect?: (lang: string) => vo
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild disabled={disabled}>
         <Button variant="outline">{language || "Select Language"}</Button>
       </DropdownMenuTrigger>
 

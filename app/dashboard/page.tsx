@@ -1,216 +1,217 @@
 "use client";
 import ProgressBarPage from "@/components/ProgressBar";
-import axios from "axios";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Loader2, ArrowRight, Github } from "lucide-react"; // Consistent iconography
+import { Button } from "@/components/ui/button";
+import apiClient from "@/lib/api";
 
-const Dashboard = () => {
-  const { data: session,status } = useSession(); // ✅ useSession here
-  const token = session?.accessToken;      // ✅ get token safely
-  const router = useRouter();
-  const [repo_url,setRepoUrl] = useState("");
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [progress,setProgress] = useState(0)
-  const [progressStart,setProgressStart] = useState(false)
-  const [statusText,setStatusText] = useState("")
+type JobStatus = "queued" | "processing" | "completed" | "failed";
 
-  useEffect(() => {
-    setLoading(true)
-    try {
-      if (status === "loading") return; // Wait until NextAuth finishes
+interface AnalyzeStatusResponse {
+  status: JobStatus;
+  message?: string;
+  error?: string;
+}
 
-      if (status === "unauthenticated") {
-        router.push("/auth/signin");
-      }
-    } catch (error) {
-      console.log(error)
-    }
-    finally{
-      setLoading(false)
-    }
-}, [status]);
-
-const POLLING_INTERVAL = 10000; // Poll every 10 seconds
-
-// Helper function to wait
-const delay = (ms: number | undefined) => new Promise(resolve => setTimeout(resolve, ms));
-
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setProgressStart(true);
-  setError('');
-  
-  let jobId = ''; // Initialize jobId outside try block for wider scope
-  
-  try {
-      // === 1. SUBMIT JOB ===
-      const submitRes = await axios.post(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/analyze_repo`,
-          { repo_url },
-          {
-              headers: {
-                  'Content-Type': 'application/json',
-                  ...(token ? { Authorization: `Bearer ${token}` } : {})
-              },
-          }
-      );
-
-      // Destructure ID and status from the successful submission
-      const { id, status: submitStatus } = submitRes.data;
-      jobId = id; // Assign to outer scope variable
-      
-      if (submitStatus === 'success') {
-          // Case 1: Job was already completed (initial cache hit)
-          // ACTION: Redirect immediately
-          router.push(`/dashboard/${jobId}`);
-          router.refresh();
-          return; // Exit the function after success
-      }
-      
-      // === 2. POLLING LOOP ===
-      let jobStatus = submitStatus; 
-
-      while (jobStatus !== 'completed' && jobStatus !== 'failed') {
-          await delay(POLLING_INTERVAL); // Ensure delay is defined in your file
-          
-          const pollRes = await axios.get(
-              `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/analyze_repo/status/${jobId}`,
-              {
-                  headers: {
-                      ...(token ? { Authorization: `Bearer ${token}` } : {})
-                  },
-              }
-          );
-
-          const progressRes = await axios.get(
-            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/analyze_repo/progress/${jobId}`,
-            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-          );
-          if(progressRes.data.progress === 100){
-            setProgress(99); 
-          }else{
-            setProgress(progressRes.data.progress); 
-          }
-
-          jobStatus = pollRes.data.status;
-
-          if (jobStatus === 'completed') {
-              // ACTION: Redirect immediately when completed status is received
-              router.push(`/dashboard/${jobId}`);
-              router.refresh();
-              // IMPORTANT: Now we rely on the redirect to stop the loading state via the 'finally' block
-              break; // Exit the loop
-          } else if (jobStatus === 'failed') {
-              // ACTION: Throw the error to be caught by the catch block
-              throw new Error(`Analysis failed: ${pollRes.data.error || 'Check backend logs.'}`);
-          }
-      }
-      
-      // Removed `return result;` as the redirect now handles the exit flow
-      
-  } catch (err: any) {
-      console.error("Analysis Polling Error:", err);
-      // ... (Error handling logic remains here) ...
-      const errorMsg =
-          err.response?.data?.error ||
-          err.response?.data?.detail ||
-          (typeof err.response?.data === "string" ? err.response.data : null) ||
-          err.message ||
-          "Something went wrong";
-      setError(errorMsg);
-      toast.error(errorMsg);
-      
-  } finally {
-      // This is correctly placed to run after try/catch block finishes (success or failure)
-      setProgressStart(false);
-  }
+interface AnalyzeProgressResponse {
+  progress: number; // 0–100
 }
 
 
+const Dashboard = () => {
+  const { data: session, status } = useSession();
+  const token = session?.accessToken;
+  const router = useRouter();
+  const [repo_url, setRepoUrl] = useState("");
+  const [loading, setLoading] = useState(false); // Used for initial button click
+  const [progress, setProgress] = useState(0);
+  const [progressStart, setProgressStart] = useState(false);
+  const [statusText, setStatusText] = useState("");
 
-  return (progressStart ? <ProgressBarPage progress={progress} statusText={statusText}/> :
-    <div className="min-h-screen bg-background text-foreground antialiased selection:bg-primary/20">
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 lg:py-32">
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/auth/signin");
+    }
+  }, [status, router]);
 
-          <section className="max-w-4xl mx-auto text-center">
-            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter mb-4 text-center">
-              Analyze Your <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500">GitHub</span> Repo
+  const POLLING_INTERVAL = 5000;
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!repo_url.includes("github.com")) {
+        toast.error("Please provide a valid GitHub URL");
+        return;
+    }
+
+    setLoading(true);
+    setProgressStart(true);
+    
+    let jobId = ''; 
+    
+    try {
+        const submitRes = await apiClient.post("/api/analyze_repo", {
+                        repo_url,
+                        });
+
+        const { id, status: submitStatus } = submitRes.data;
+        jobId = id;
+        
+        if (submitStatus === 'success') {
+            router.push(`/dashboard/${jobId}`);
+            return;
+        }
+        
+        let jobStatus = submitStatus; 
+
+        while (jobStatus !== "completed" && jobStatus !== "failed") {
+                await delay(POLLING_INTERVAL);
+
+                const [statusRes, progressRes] = await Promise.all([
+                    apiClient.get<AnalyzeStatusResponse>(
+                    `/api/analyze_repo/status/${jobId}`
+                    ),
+                    apiClient.get<AnalyzeProgressResponse>(
+                    `/api/analyze_repo/progress/${jobId}`
+                    ),
+                ]);
+
+                const { status, message, error } = statusRes.data;
+                const { progress } = progressRes.data;
+
+                // UI smoothing (avoid jumping to 100% before redirect)
+                setProgress(progress === 100 ? 99 : progress);
+
+                setStatusText(
+                    message ?? "Analyzing repository structure..."
+                );
+
+                jobStatus = status;
+
+                if (status === "completed") {
+                    router.push(`/dashboard/${jobId}`);
+                    router.refresh();
+                    break;
+                }
+
+                if (status === "failed") {
+                    throw new Error(error ?? "Analysis failed.");
+                }
+        }
+    } catch (err: any) {
+        const errorMsg = err.response?.data?.detail || err.message || "Something went wrong";
+        console.error("Analysis Error:", errorMsg);
+        toast.error("Something went wrong");
+        setProgressStart(false); // Only stop progress if it fails
+    } finally {
+        setLoading(false);
+    }
+  }
+
+  // --- RENDERING ---
+
+  if (progressStart) {
+      return <ProgressBarPage statusText={statusText}/>;
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground antialiased selection:bg-indigo-500/20">
+      <main className="container mx-auto px-4 py-12 md:py-24 lg:py-32">
+
+        <section className="max-w-4xl mx-auto text-center mb-16">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 text-xs font-medium mb-6">
+                <Github className="w-3 h-3" />
+                <span>Now supporting public repositories</span>
+            </div>
+            
+            <h1 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold tracking-tight mb-6">
+                Analyze Your <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-500 to-purple-600">GitHub</span> Repo
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-              Instantly generate documentation, visualize dependencies, and uncover insights for any public GitHub repository.
+            
+            <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
+                Instantly generate documentation, visualize dependencies, and uncover insights for any public GitHub repository.
             </p>
 
-            <div className="Card p-4 md:p-6 lg:p-8 shadow-xl border border-border rounded-xl w-full max-w-2xl mx-auto transition-all hover:shadow-2xl">
-              <form className="flex flex-col gap-3 sm:flex-row sm:gap-2" >
-                
-                <div className="relative grow">
-                  <label htmlFor="repo-url" className="sr-only">GitHub Repository URL</label>
-                  <input
-                    id="repo-url"
-                    type="url"
-                    placeholder="Paste your GitHub URL here (e.g., https://github.com/shadcn/ui)"
-                    className="Input flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    required
-                    onChange={(e)=>setRepoUrl(e.target.value)}
-                  />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg hidden sm:block">
-                      </span>
-                </div>
+            <div className="mx-auto w-full max-w-2xl bg-card p-2 sm:p-4 rounded-2xl border border-border shadow-2xl transition-all hover:shadow-indigo-500/5">
+                <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative grow">
+                        <input
+                            type="url"
+                            placeholder="https://github.com/username/repo"
+                            className="w-full h-12 px-4 rounded-xl border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50 transition-all"
+                            required
+                            value={repo_url}
+                            onChange={(e) => setRepoUrl(e.target.value)}
+                        />
+                    </div>
 
-                <button type="submit" onClick={handleSubmit} disabled={loading || progressStart}
-                 className="Button inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 whitespace-nowrap">
-                  Analyze <span className="ml-2 hidden sm:inline-block">Repo</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                </button>
-              </form>
-              <p className="text-xs text-muted-foreground mt-3 text-left sm:text-center">
-                *Supports public repositories on **github.com** only. Analysis is free.
-              </p>
+                    <Button 
+                        type="submit" 
+                        disabled={loading || !repo_url}
+                        className="h-12 px-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+                    >
+                        {loading ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                            <span className="flex items-center gap-2">
+                                Analyze <ArrowRight className="w-4 h-4" />
+                            </span>
+                        )}
+                    </Button>
+                </form>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-4 italic">
+                    *Requires a public repository URL. High-traffic repos may take longer.
+                </p>
             </div>
-          </section>
-          
-          <div className="mt-20 flex items-center justify-center">
-              <hr className="Separator w-1/2 max-w-md border-t border-border" />
-          </div>
+        </section>
+        
+        {/* Features Section */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto">
+            <FeatureCard 
+                icon="🛠️" 
+                title="Dependency Tree" 
+                desc="Visualize your project's entire dependency graph instantly." 
+                color="indigo" 
+            />
+            <FeatureCard 
+                icon="📝" 
+                title="Auto-Docs" 
+                desc="Generate comprehensive markdown docs for complex modules." 
+                color="purple" 
+            />
+            <FeatureCard 
+                icon="📈" 
+                title="Health Score" 
+                desc="Receive a detailed report on maintainability and best practices." 
+                color="green" 
+            />
+        </section>
+      </main>
 
-          <section className="mt-20">
-              <h2 className="text-3xl font-bold text-center mb-12 tracking-tight">Features Built for Developers</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <div className="Card p-6 bg-card text-card-foreground rounded-lg border border-border shadow-md hover:shadow-lg transition-shadow">
-                      <div className="text-3xl text-indigo-500 mb-3">🛠️</div>
-                      <h3 className="font-semibold text-lg mb-2">Dependency Tree</h3>
-                      <p className="text-sm text-muted-foreground">Visualize your project's entire dependency graph instantly.</p>
-                  </div>
-                  <div className="Card p-6 bg-card text-card-foreground rounded-lg border border-border shadow-md hover:shadow-lg transition-shadow">
-                      <div className="text-3xl text-purple-500 mb-3">📝</div>
-                      <h3 className="font-semibold text-lg mb-2">Auto-Documentation</h3>
-                      <p className="text-sm text-muted-foreground">Generate comprehensive markdown docs for complex modules.</p>
-                  </div>
-                  <div className="Card p-6 bg-card text-card-foreground rounded-lg border border-border shadow-md hover:shadow-lg transition-shadow">
-                      <div className="text-3xl text-green-500 mb-3">📈</div>
-                      <h3 className="font-semibold text-lg mb-2">Code Health Score</h3>
-                      <p className="text-sm text-muted-foreground">Receive a detailed report on maintainability and best practices.</p>
-                  </div>
-              </div>
-          </section>
-        </main>
-        <footer className="mt-24 border-t border-border py-8 text-sm bg-background">
-          <div className="container mx-auto flex flex-col md:flex-row justify-between items-center px-4 sm:px-6 lg:px-8 text-muted-foreground">
-            <p>&copy; 2025 RepoScan. All rights reserved.</p>
-            <div className="flex space-x-4 mt-4 md:mt-0">
-              <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-              <a href="#" className="hover:text-primary transition-colors">Terms</a>
-              <a href="https://github.com" className="hover:text-primary transition-colors">GitHub</a>
+      <footer className="border-t border-border py-12 bg-slate-50/50 dark:bg-transparent">
+        <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center text-muted-foreground">
+            <p className="font-medium text-sm">&copy; 2025 RepoScan</p>
+            <div className="flex space-x-8 mt-6 md:mt-0 text-sm">
+                <a href="#" className="hover:text-indigo-500 transition-colors">Privacy</a>
+                <a href="#" className="hover:text-indigo-500 transition-colors">Terms</a>
+                <a href="#" className="hover:text-indigo-500 transition-colors">Support</a>
             </div>
-          </div>
-        </footer>
-</div>
+        </div>
+      </footer>
+    </div>
   );
 };
 
+// Reusable Feature Card to keep JSX clean
+const FeatureCard = ({ icon, title, desc, color }: { icon: string, title: string, desc: string, color: string }) => (
+    <div className="group p-8 bg-card rounded-2xl border border-border shadow-sm hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/5 transition-all">
+        <div className={`text-4xl mb-4 group-hover:scale-110 transition-transform inline-block`}>{icon}</div>
+        <h3 className="font-bold text-lg mb-2">{title}</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+    </div>
+);
+
 export default Dashboard;
-
-

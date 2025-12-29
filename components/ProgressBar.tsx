@@ -1,11 +1,10 @@
 "use client";
 
 interface loadingProps{
-    progress:number,
     statusText:string
 }
 
-const ProgressBarPage = ({progress,statusText}:loadingProps) => {
+const ProgressBarPage = ({statusText}:loadingProps) => {
   
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground px-4">
@@ -46,22 +45,6 @@ const ProgressBarPage = ({progress,statusText}:loadingProps) => {
         <div className="text-center text-sm font-medium text-primary">
           {statusText}
         </div>
-
-        {/* Dynamic Progress Bar */}
-        <div className="w-full">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-semibold text-primary">Progress</span>
-            <span className="text-xs font-semibold text-primary">{Math.floor(progress)}%</span>
-          </div>
-
-          <div className="h-3 w-full bg-secondary rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-300 ease-out"
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
-        </div>
-
       </div>
     </div>
   );
